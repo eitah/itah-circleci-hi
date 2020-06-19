@@ -8,4 +8,6 @@ jobs:
           name: The First Step
           command: |
             echo 'Hello World!'
+            apk --no-cache add curl
+            curl 'https://xkcd.com/info.0.json'
             echo 'This is the delivery pipeline'
