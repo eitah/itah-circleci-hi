@@ -1,27 +1,18 @@
-version: 2.1
-
-orbs:
-  slack: circleci/slack@3.4.2
-
 jobs:
   build:
     docker:
       - image: alpine:3.7
     steps:
       - slack/notify:
-          channel: CHANNELID
+          channel: Eli
           color: '#42e2f4'
           mentions: 'USERID1,USERID2,'
           message: This is a custom message notification
           webhook: webhook
-  # build:
-  #   docker:
-  #     - image: alpine:3.7
-  #   steps:
-  #     - run:
-          name: The First Step
-          command: |
-            echo 'Hello World!'
-            apk --no-cache add curl
-            curl 'https://xkcd.com/info.0.json'
-            echo 'This is the delivery pipeline'
+orbs:
+  slack: circleci/slack@3.4
+version: 2.1
+workflows:
+  your-workflow:
+    jobs:
+      - build
