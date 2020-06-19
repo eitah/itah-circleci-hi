@@ -8,10 +8,12 @@ jobs:
     docker:
       - image: alpine:3.7
     steps:
-      - slack/approval-notification:
-          color: "#aa7fcd" # Optional: Enter your own message
-          message: "Deployment pending approval" # Optional: Custom approval message
-          channel: "CHANNELID" # Optional: If set, overrides webhook's default channel setting
+      - slack/notify:
+          channel: CHANNELID
+          color: '#42e2f4'
+          mentions: 'USERID1,USERID2,'
+          message: This is a custom message notification
+          webhook: webhook
   # build:
   #   docker:
   #     - image: alpine:3.7
