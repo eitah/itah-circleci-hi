@@ -8,11 +8,10 @@ jobs:
     docker:
       - image: alpine:3.7
     steps:
-      - slack/approval:
-          message: "This is a custom approval message" # Optional: Enter your own message
-          mentions: "USERID1,USERID2," # Optional: Enter the Slack IDs of any user or group (sub_team) to be mentioned
-          color: "#42e2f4" # Optional: Assign custom colors for each approval message
-          webhook: "webhook" # Optional: Enter a specific webhook here or the default will use $SLACK_WEBHOOK
+      - slack/approval-notification:
+          color: "#aa7fcd" # Optional: Enter your own message
+          message: "Deployment pending approval" # Optional: Custom approval message
+          channel: "CHANNELID" # Optional: If set, overrides webhook's default channel setting
   # build:
   #   docker:
   #     - image: alpine:3.7
