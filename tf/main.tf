@@ -78,8 +78,14 @@ resource aws_apigatewayv2_integration notifications {
 
   description          = "notifications route for slack"
   integration_method   = "POST"
-  passthrough_behavior = "WHEN_NO_MATCH"
+  # passthrough_behavior = "WHEN_NO_MATCH"
   integration_uri      = aws_lambda_function.lambda.invoke_arn
+}
+
+# Adds a prod stage to thid but its still not a working terraform implementation i used the console to create
+resource "aws_apigatewayv2_stage" "prod" {
+  api_id = aws_apigatewayv2_api.gateway.id
+  name   = "prod"
 }
 
 // todo get this bound to the gateway - at the moment running will just break permissions I think
@@ -91,7 +97,7 @@ resource "aws_lambda_permission" "lambda_permission" {
   principal     = "apigateway.amazonaws.com"
 
   # The /*/*/* part allows invocation from any stage, method and resource path
-  # within API Gateway REST API. The routes themselves hadle pathing.
+  # within API Gateway REST API. the last one indicates where to send requests to.
   # see more detail https://docs.aws.amazon.com/lambda/latest/dg/services-apigateway.html
-  source_arn = "${aws_apigatewayv2_api.gateway.execution_arn}/*/*/*"
+  source_arn = "${aws_apigatewayv2_api.gateway.execution_arn}/*/*/${aws_lambda_function.lambda.function_name}"
 }
