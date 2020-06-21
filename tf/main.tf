@@ -20,7 +20,7 @@ resource "aws_lambda_function" "lambda" {
   function_name = "circleci-hi-lambda"
   role =  aws_iam_role.lambda.arn
   description = "circleci-hi-lambda"
-  handler = "circleci-hi-handler"
+  handler = "circleci-handler"
   runtime = "go1.x"
   timeout = 10
 
