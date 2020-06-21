@@ -11,8 +11,8 @@ provider aws {
 terraform {
   required_version = "~> 0.12.21"
   backend "s3" {
-    bucket  = "spicy-omelet-terraform"
-    key     = "circleci/hi.tfstate"
+    bucket = "spicy-omelet-terraform"
+    key    = "circleci/hi.tfstate"
     // Use Server-Side Encryption with Amazon S3-Managed Keys (SSE-S3)
     encrypt = "true"
     region  = "us-east-1"
