@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/aws/aws-lambda-go/lambda"
 	"net/http"
 	"os"
 	"time"
@@ -46,6 +47,12 @@ func init() {
 	if config.LogJSON {
 		log.SetFormatter(&logrus.JSONFormatter{})
 	}
+}
+
+func main() {
+	// todo I want header auth to happen in the gateway not in the lambda, so I bypass using that config value for now
+	lambda.Start(handler)
+	// eliTesting()
 }
 
 func handler(ctx context.Context, _ events.APIGatewayProxyRequest) (string, error) {
