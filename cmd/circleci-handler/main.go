@@ -52,8 +52,17 @@ func init() {
 func main() {
 	// todo I want header auth to happen in the gateway not in the lambda, so I bypass using that config value for now
 	lambda.Start(handler)
-	// eliTesting()
+	//eliTesting()
+
 }
+
+//func eliTesting() {
+//	ctx := context.Background()
+//	err := postToWebHook(ctx)
+//	if err != nil {
+//		fmt.Println(err)
+//	}
+//}
 
 func handler(ctx context.Context, _ events.APIGatewayProxyRequest) (string, error) {
 	err := postToWebHook(ctx)
@@ -72,8 +81,8 @@ func postToWebHook(ctx context.Context) error {
 		Timeout: time.Duration(5 * time.Second),
 	}
 
-	requestBody, err := json.Marshal(slackWebHookPostBody{
-		text: "I am deployed!",
+	requestBody, err := json.Marshal(map[string]string{
+		"text": "I am deployed!",
 	})
 	if err != nil {
 		return err
