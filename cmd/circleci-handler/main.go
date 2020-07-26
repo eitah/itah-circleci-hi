@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/davecgh/go-spew/spew"
@@ -47,57 +48,52 @@ func init() {
 	}
 }
 
-func main() {
-	// todo I want header auth to happen in the gateway not in the lambda, so I bypass using that config value for now
-	// lambda.Start(handler)
-	eliTesting()
+func handler(ctx context.Context, _ events.APIGatewayProxyRequest) (string, error) {
+	err := postToWebHook(ctx)
+	if err != nil {
+		return "", err
+	}
+	return "Eli says success!", nil
 }
 
-type postBody struct {
+type slackWebHookPostBody struct {
 	text string
 }
 
-func eliTesting() (string, error) {
-	spew.Dump("eli is the best!")
-	// curl -X POST -H 'Content-type: application/json' --data '{"text":"Hello, World!"}'
-	var buf bytes.Buffer
-	p := postBody{text: "Hello, Pipeline!"}
-
-	err := json.NewEncoder(&buf).Encode(p)
-	if err != nil {
-		return "", err
+func postToWebHook(ctx context.Context) error {
+	client := http.Client{
+		Timeout: time.Duration(5 * time.Second),
 	}
-	spew.Dump("eprepost")
 
-	response, err := http.Post(config.SlackWebhookURL, "application/json", &buf)
+	requestBody, err := json.Marshal(slackWebHookPostBody{
+		text: "I am deployed!",
+	})
 	if err != nil {
-		spew.Dump("err", err)
-
-		return "", err
+		return err
 	}
-	defer response.Body.Close()
-	spew.Dump("post")
 
-	return "success", nil
-}
+	spew.Dump("webhook url is", config.SlackWebhookURL)
 
-func handler(ctx context.Context, event events.APIGatewayProxyRequest) (string, error) {
-	spew.Dump("eli is the best!")
-	// curl -X POST -H 'Content-type: application/json' --data '{"text":"Hello, World!"}'
-	var buf bytes.Buffer
-	p := postBody{text: "Hello, Pipeline!"}
-
-	err := json.NewEncoder(&buf).Encode(p)
+	req, err := http.NewRequestWithContext(ctx, "POST", config.SlackWebhookURL, bytes.NewBuffer(requestBody))
 	if err != nil {
-		return "", err
+		return err
 	}
-	response, err := http.Post(config.SlackWebhookURL, "application/json", &buf)
-	if err != nil {
-		return "", err
-	}
-	defer response.Body.Close()
-	spew.Dump(err)
-	return "success", nil
 
-	// response, err := http.Post("")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("Webhook failed! Status Code: %v \n", resp.StatusCode)
+	}
+
+	// this is not needed rn but i thought I might want to reference it
+	//_, err := ioutil.ReadAll(resp.Body)
+	//spew.Dump(string(body))
+
+	return nil
 }
