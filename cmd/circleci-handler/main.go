@@ -53,7 +53,6 @@ func main() {
 	// todo I want header auth to happen in the gateway not in the lambda, so I bypass using that config value for now
 	lambda.Start(handler)
 	//eliTesting()
-
 }
 
 //func eliTesting() {
@@ -64,16 +63,27 @@ func main() {
 //	}
 //}
 
-func handler(ctx context.Context, _ events.APIGatewayProxyRequest) (string, error) {
-	err := postToWebHook(ctx)
-	if err != nil {
-		return "", err
-	}
+func handler(ctx context.Context, e events.APIGatewayProxyRequest) (string, error) {
+	// parse event and get the payload details
+	body := e.Body
+	spew.Dump(body)
+	//err := ProcessBuildNotification(ctx, body
+	// check redis for details and write new details if required
+
+	// if unique or errored, post to redis, else drop it or throw or w/e
+	//err := postToWebHook(ctx)
+	//if err != nil {
+	//	return "", err
+	//}
 	return "Eli says success!", nil
 }
 
-type slackWebHookPostBody struct {
+type SlackFailurePayload struct {
 	text string
+}
+
+func ProcessBuildNotification(ctx context.Context, e events.APIGatewayProxyRequest)  {
+
 }
 
 func postToWebHook(ctx context.Context) error {

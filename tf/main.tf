@@ -9,6 +9,7 @@ resource "aws_s3_bucket" "lambda_source" {
 # $ echo "package main" > null.go
 # $ zip null.zip null.go
 # $ aws s3 cp null.zip s3://spicy-omelet-lambda-source/null.zip
+# Better yet next time use data "archive_file" "null.zip" { type = zip ... } to avoid manually preparing things
 resource "aws_s3_bucket_object" "lambda_src_null_zip" {
   key                    = "null.zip"
   bucket                 = aws_s3_bucket.lambda_source.id
