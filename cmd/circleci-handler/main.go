@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/sirupsen/logrus"
@@ -50,53 +51,59 @@ func init() {
 
 func main() {
 	// todo I want header auth to happen in the gateway not in the lambda, so I bypass using that config value for now
-	//lambda.Start(handler)
-	eliTesting()
+	lambda.Start(handler)
+	// eliTesting()
 }
 
-func eliTesting() {
-	ctx := context.Background()
-	build, err := processBuildNotification(ctx, "{ \"attachments\": [             {               \"fallback\": \":red_circle: A $CIRCLE_JOB job has failed!\",               \"text\": \":red_circle: A $CIRCLE_JOB job has failed! $SLACK_MENTIONS\",               \"fields\": [                 {                   \"title\": \"Project\",                   \"value\": \"$CIRCLE_PROJECT_REPONAME\",                   \"short\": true                 },                 {                   \"title\": \"Job Number\",                   \"value\": \"$CIRCLE_BUILD_NUM\",                   \"short\": true                 }               ],               \"actions\": [                 {                   \"type\": \"button\",                   \"text\": \"Visit Job\",                   \"url\": \"$CIRCLE_BUILD_URL\"                 }               ],               \"color\": \"#ed5c5c\"             }           ]         }")
+// func eliTesting() (string, error) {
+// 	ctx := context.Background()
+// 	build, err := processBuildNotification(ctx, "{ \"attachments\": [             {               \"fallback\": \":red_circle: A $CIRCLE_JOB job has failed!\",               \"text\": \":red_circle: A $CIRCLE_JOB job has failed! $SLACK_MENTIONS\",               \"fields\": [                 {                   \"title\": \"Project\",                   \"value\": \"$CIRCLE_PROJECT_REPONAME\",                   \"short\": true                 },                 {                   \"title\": \"Job Number\",                   \"value\": \"$CIRCLE_BUILD_NUM\",                   \"short\": true                 }               ],               \"actions\": [                 {                   \"type\": \"button\",                   \"text\": \"Visit Job\",                   \"url\": \"$CIRCLE_BUILD_URL\"                 }               ],               \"color\": \"#ed5c5c\"             }           ]         }")
+// 	if err != nil {
+// 		spew.Dump(err)
+// 	}
 
-	sendMe, err := Debounce()
-	if err != nill {
+// err = doWork(ctx, build)
+// if err != nil {
+// 	return "", err
+// }
+// 	return "Eli says local!", nil
+// }
+
+func handler(ctx context.Context, e events.APIGatewayProxyRequest) (string, error) {
+	build, err := processBuildNotification(ctx, e.Body)
+	if err != nil {
+		return "", err
+	}
+
+	err = doWork(ctx, build)
+	if err != nil {
+		return "", err
+	}
+
+	return "Eli says success!", nil
+}
+
+func doWork(ctx context.Context, build BuildStatus) error {
+	sendMe, err := Debounce(build)
+	if err != nil {
 		//  assume if redis fails  we should still proceed to post
 		sendMe = true
 	}
 
 	if sendMe == true {
-		//postErr := postToWebHook(ctx)
-		// if postErr != nil {
-		// 	fmt.Println(err)
-		// }
+		postErr := postToWebHook(ctx, build)
+		if postErr != nil {
+			return postErr
+		}
 	}
 
 	if err != nil {
 		// only after the post occurs do we want to return failure
-		fmt.Println(err)
+		return err
 	}
-	spew.Dump(sendMe)
+	spew.Dump("sendme =>", sendMe)
 
-}
-
-func handler(ctx context.Context, e events.APIGatewayProxyRequest) (string, error) {
-	// parse event and get the payload details
-	//body := e.Body
-
-	//build, err := ProcessBuildNotification(ctx, e.Body);
-	// check redis for details and write new details if required
-
-	// if unique or errored, post to redis, else drop it or throw or w/e
-	//err := postToWebHook(ctx)
-	//if err != nil {
-	//	return "", err
-	//}
-	return "Eli says success!", nil
-}
-
-// Debounce queries redis for the notification entry and returns sendMe
-func Debounce(build BuildStatus) (bool, error) {
-
+	return nil
 }
 
 // BuildStatusNotification is an incoming circleci build status
@@ -144,13 +151,18 @@ func processBuildNotification(_ context.Context, e string) (BuildStatus, error) 
 	return build, nil
 }
 
-func postToWebHook(ctx context.Context) error {
+// Debounce queries redis for the notification entry and returns sendMe
+func Debounce(build BuildStatus) (bool, error) {
+	return true, nil
+}
+
+func postToWebHook(ctx context.Context, build BuildStatus) error {
 	client := http.Client{
 		Timeout: time.Duration(5 * time.Second),
 	}
 
 	requestBody, err := json.Marshal(map[string]string{
-		"text": "I am deployed!",
+		"text": fmt.Sprintf("Build failure for %s build %s. Visit %s for more details", build.ProjectReponame, build.CircleBuildNum, build.CircleBuildURL),
 	})
 	if err != nil {
 		return err
@@ -172,7 +184,7 @@ func postToWebHook(ctx context.Context) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("Webhook failed! Status Code: %v \n", resp.StatusCode)
+		return fmt.Errorf("Webhook failed! Status Code: %v", resp.StatusCode)
 	}
 
 	// this is not needed rn but i thought I might want to reference it
