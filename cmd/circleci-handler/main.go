@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
-	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/sirupsen/logrus"
@@ -51,46 +50,51 @@ func init() {
 
 func main() {
 	// todo I want header auth to happen in the gateway not in the lambda, so I bypass using that config value for now
-	lambda.Start(handler)
-	// eliTesting()
+	// lambda.Start(handler)
+	err := eliTesting()
+	if err != nil {
+		spew.Dump(err)
+	} else {
+		spew.Dump("All good!")
+	}
 }
 
-// func eliTesting() (string, error) {
-// 	ctx := context.Background()
-// 	build, err := processBuildNotification(ctx, "{ \"attachments\": [             {               \"fallback\": \":red_circle: A $CIRCLE_JOB job has failed!\",               \"text\": \":red_circle: A $CIRCLE_JOB job has failed! $SLACK_MENTIONS\",               \"fields\": [                 {                   \"title\": \"Project\",                   \"value\": \"$CIRCLE_PROJECT_REPONAME\",                   \"short\": true                 },                 {                   \"title\": \"Job Number\",                   \"value\": \"$CIRCLE_BUILD_NUM\",                   \"short\": true                 }               ],               \"actions\": [                 {                   \"type\": \"button\",                   \"text\": \"Visit Job\",                   \"url\": \"$CIRCLE_BUILD_URL\"                 }               ],               \"color\": \"#ed5c5c\"             }           ]         }")
-// 	if err != nil {
-// 		spew.Dump(err)
-// 	}
-
-// err = doWork(ctx, build)
-// if err != nil {
-// 	return "", err
-// }
-// 	return "Eli says local!", nil
-// }
-
-func handler(ctx context.Context, e events.APIGatewayProxyRequest) (string, error) {
-	build, err := processBuildNotification(ctx, e.Body)
+func eliTesting() error {
+	ctx := context.Background()
+	build, err := processBuildNotification(ctx, "{ \"attachments\": [             {               \"fallback\": \":red_circle: A $CIRCLE_JOB job has failed!\",               \"text\": \":red_circle: A $CIRCLE_JOB job has failed! $SLACK_MENTIONS\",               \"fields\": [                 {                   \"title\": \"Project\",                   \"value\": \"$CIRCLE_PROJECT_REPONAME\",                   \"short\": true                 },                 {                   \"title\": \"Job Number\",                   \"value\": \"123456\",                   \"short\": true                 }               ],               \"actions\": [                 {                   \"type\": \"button\",                   \"text\": \"Visit Job\",                   \"url\": \"$CIRCLE_BUILD_URL\"                 }               ],               \"color\": \"#ed5c5c\"             }           ]         }")
 	if err != nil {
-		return "", err
+		spew.Dump(err)
 	}
 
 	err = doWork(ctx, build)
 	if err != nil {
-		return "", err
+		return err
 	}
+	return nil
+}
+
+func handler(ctx context.Context, e events.APIGatewayProxyRequest) (string, error) {
+	// build, err := processBuildNotification(ctx, e.Body)
+	// if err != nil {
+	// 	return "", err
+	// }
+
+	// err = doWork(ctx, build)
+	// if err != nil {
+	// 	return "", err
+	// }
 
 	return "Eli says success!", nil
 }
 
 func doWork(ctx context.Context, build BuildStatus) error {
-	sendMe, err := Debounce(build)
+	ok, err := Debounce(build)
 	if err != nil {
 		//  assume if redis fails  we should still proceed to post
-		sendMe = true
+		ok = true
 	}
 
-	if sendMe == true {
+	if ok == true {
 		postErr := postToWebHook(ctx, build)
 		if postErr != nil {
 			return postErr
@@ -101,7 +105,7 @@ func doWork(ctx context.Context, build BuildStatus) error {
 		// only after the post occurs do we want to return failure
 		return err
 	}
-	spew.Dump("sendme =>", sendMe)
+	spew.Dump("ok =>", ok)
 
 	return nil
 }
@@ -169,6 +173,9 @@ func postToWebHook(ctx context.Context, build BuildStatus) error {
 	}
 
 	spew.Dump("webhook url is", config.SlackWebhookURL)
+	if config.SlackWebhookURL == "" {
+		return fmt.Errorf("Please provide a slack webhook url config value")
+	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", config.SlackWebhookURL, bytes.NewBuffer(requestBody))
 	if err != nil {
