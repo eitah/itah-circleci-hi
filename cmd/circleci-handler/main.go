@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/aws/aws-lambda-go/lambda"
 	"net/http"
 	"os"
 	"time"
@@ -51,23 +50,40 @@ func init() {
 
 func main() {
 	// todo I want header auth to happen in the gateway not in the lambda, so I bypass using that config value for now
-	lambda.Start(handler)
-	//eliTesting()
+	//lambda.Start(handler)
+	eliTesting()
 }
 
-//func eliTesting() {
-//	ctx := context.Background()
-//	err := postToWebHook(ctx)
-//	if err != nil {
-//		fmt.Println(err)
-//	}
-//}
+func eliTesting() {
+	ctx := context.Background()
+	build, err := processBuildNotification(ctx, "{ \"attachments\": [             {               \"fallback\": \":red_circle: A $CIRCLE_JOB job has failed!\",               \"text\": \":red_circle: A $CIRCLE_JOB job has failed! $SLACK_MENTIONS\",               \"fields\": [                 {                   \"title\": \"Project\",                   \"value\": \"$CIRCLE_PROJECT_REPONAME\",                   \"short\": true                 },                 {                   \"title\": \"Job Number\",                   \"value\": \"$CIRCLE_BUILD_NUM\",                   \"short\": true                 }               ],               \"actions\": [                 {                   \"type\": \"button\",                   \"text\": \"Visit Job\",                   \"url\": \"$CIRCLE_BUILD_URL\"                 }               ],               \"color\": \"#ed5c5c\"             }           ]         }")
+
+	sendMe, err := Debounce()
+	if err != nill {
+		//  assume if redis fails  we should still proceed to post
+		sendMe = true
+	}
+
+	if sendMe == true {
+		//postErr := postToWebHook(ctx)
+		// if postErr != nil {
+		// 	fmt.Println(err)
+		// }
+	}
+
+	if err != nil {
+		// only after the post occurs do we want to return failure
+		fmt.Println(err)
+	}
+	spew.Dump(sendMe)
+
+}
 
 func handler(ctx context.Context, e events.APIGatewayProxyRequest) (string, error) {
 	// parse event and get the payload details
-	body := e.Body
-	spew.Dump(body)
-	//err := ProcessBuildNotification(ctx, body
+	//body := e.Body
+
+	//build, err := ProcessBuildNotification(ctx, e.Body);
 	// check redis for details and write new details if required
 
 	// if unique or errored, post to redis, else drop it or throw or w/e
@@ -78,12 +94,54 @@ func handler(ctx context.Context, e events.APIGatewayProxyRequest) (string, erro
 	return "Eli says success!", nil
 }
 
-type SlackFailurePayload struct {
-	text string
+// Debounce queries redis for the notification entry and returns sendMe
+func Debounce(build BuildStatus) (bool, error) {
+
 }
 
-func ProcessBuildNotification(ctx context.Context, e events.APIGatewayProxyRequest)  {
+// BuildStatusNotification is an incoming circleci build status
+type BuildStatusNotification struct {
+	Attachments []struct {
+		Fallback string `json:"fallback"`
+		Fields   []struct {
+			Title string `json:"title"`
+			Value string `json:"value"`
+		} `json:"fields"`
+		Actions []struct {
+			Title string `json:"title"`
+			URL   string `json:"url"`
+		} `json:"actions"`
+	} `json:"attachments"`
+}
 
+// BuildStatus is the outgoing flatter
+type BuildStatus struct {
+	ProjectReponame string
+	CircleBuildNum  string
+	CircleBuildURL  string
+}
+
+func processBuildNotification(_ context.Context, e string) (BuildStatus, error) {
+	var raw BuildStatusNotification
+	var build BuildStatus
+	err := json.Unmarshal([]byte(e), &raw)
+	if err != nil {
+		return BuildStatus{}, err
+	}
+
+	if raw.Attachments[0].Fields[0].Title == "Project" {
+		build.ProjectReponame = raw.Attachments[0].Fields[0].Value
+	}
+
+	if raw.Attachments[0].Fields[1].Title == "Job Number" {
+		build.CircleBuildNum = raw.Attachments[0].Fields[1].Value
+	}
+
+	if raw.Attachments[0].Actions[0].URL != "" {
+		build.CircleBuildURL = raw.Attachments[0].Actions[0].URL
+	}
+
+	return build, nil
 }
 
 func postToWebHook(ctx context.Context) error {
