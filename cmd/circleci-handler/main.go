@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/go-redis/redis/v8"
 	"net/http"
 	"os"
 	"time"
@@ -18,6 +19,8 @@ import (
 // Config contains all the configurable env variables absorbed from the environment. split_words turns camel in to snake case.
 type Config struct {
 	SlackWebhookURL string `split_words:"true" envconfig:"SLACK_WEBHOOK_URL"`
+	StatusExpiration time.Duration `split_words:"true" default:"30m"`
+	RedisAddr string `split_words:"true" envconfig:"REDIS_ADDR"`
 
 	// logging
 	LogLevel string `split_words:"true" default:"info"`
@@ -66,10 +69,19 @@ func eliTesting() error {
 		spew.Dump(err)
 	}
 
+	client := redis.NewClient(&redis.Options{
+		Addr:     config.RedisAddr,
+		Password: "",
+		DB:       0,
+	})
+	build.client = client
+
 	err = doWork(ctx, build)
 	if err != nil {
 		return err
 	}
+
+	fmt.Println("Eli local says success!")
 	return nil
 }
 
@@ -78,6 +90,13 @@ func handler(ctx context.Context, e events.APIGatewayProxyRequest) (string, erro
 	// if err != nil {
 	// 	return "", err
 	// }
+
+	//client := redis.NewClient(&redis.Options{
+	//	Addr:     config.RedisAddr,
+	//	Password: "",
+	//	DB:       0,
+	//})
+	//build.client = client
 
 	// err = doWork(ctx, build)
 	// if err != nil {
@@ -88,7 +107,7 @@ func handler(ctx context.Context, e events.APIGatewayProxyRequest) (string, erro
 }
 
 func doWork(ctx context.Context, build BuildStatus) error {
-	ok, err := Debounce(build)
+	ok, err := Debounce(ctx, build)
 	if err != nil {
 		//  assume if redis fails  we should still proceed to post
 		ok = true
@@ -127,9 +146,10 @@ type BuildStatusNotification struct {
 
 // BuildStatus is the outgoing flatter
 type BuildStatus struct {
-	ProjectReponame string
-	CircleBuildNum  string
-	CircleBuildURL  string
+	ProjectRepo    string
+	CircleBuildNum string
+	CircleBuildURL string
+	client         *redis.Client
 }
 
 func processBuildNotification(_ context.Context, e string) (BuildStatus, error) {
@@ -141,7 +161,7 @@ func processBuildNotification(_ context.Context, e string) (BuildStatus, error) 
 	}
 
 	if raw.Attachments[0].Fields[0].Title == "Project" {
-		build.ProjectReponame = raw.Attachments[0].Fields[0].Value
+		build.ProjectRepo = raw.Attachments[0].Fields[0].Value
 	}
 
 	if raw.Attachments[0].Fields[1].Title == "Job Number" {
@@ -156,7 +176,17 @@ func processBuildNotification(_ context.Context, e string) (BuildStatus, error) 
 }
 
 // Debounce queries redis for the notification entry and returns sendMe
-func Debounce(build BuildStatus) (bool, error) {
+func Debounce(ctx context.Context, b BuildStatus) (bool, error) {
+	val, err := b.client.Get(ctx, b.CircleBuildNum).Result()
+	if err != nil {
+		return false, err
+	}
+
+	if val != "" {
+		// If we've already sent a notification for this build, no need to send again
+		return false, nil
+	}
+
 	return true, nil
 }
 
@@ -166,7 +196,7 @@ func postToWebHook(ctx context.Context, build BuildStatus) error {
 	}
 
 	requestBody, err := json.Marshal(map[string]string{
-		"text": fmt.Sprintf("Build failure for %s build %s. Visit %s for more details", build.ProjectReponame, build.CircleBuildNum, build.CircleBuildURL),
+		"text": fmt.Sprintf("Build failure for %s build %s. Visit %s for more details", build.ProjectRepo, build.CircleBuildNum, build.CircleBuildURL),
 	})
 	if err != nil {
 		return err
@@ -197,6 +227,16 @@ func postToWebHook(ctx context.Context, build BuildStatus) error {
 	// this is not needed rn but i thought I might want to reference it
 	//_, err := ioutil.ReadAll(resp.Body)
 	//spew.Dump(string(body))
+
+	return nil
+}
+
+func (b BuildStatus) persistNotification(ctx context.Context) error {
+	expiration := config.StatusExpiration // arbitrary, bc we dont think build numbers will repeat
+	 _, err := b.client.Set(ctx, b.CircleBuildNum, b.CircleBuildURL, expiration).Result()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
